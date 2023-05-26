@@ -1,0 +1,116 @@
+version: "3.4"
+
+services:
+  app4unit: 
+    container_name: "app4unit"
+    build: 
+      context: ./dockerfiles/dockerUnit/
+      args:
+        - BELLINI_PROJECT_PASSWORD=${BELLINI_PROJECT_PASSWORD}
+        - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    networks:
+      cocoa_net:
+        ipv4_address: 172.16.0.3
+    environment:
+      - WILDFLY_USER=igor
+      - WILDFLY_PASS=${WILDFLY_PASSWORD}
+      - DB_NAME=unit
+      - DB_USER=javaclient
+      - DB_PASS=${MYSQL_PASSWORD}
+      - DB_URI=db4unit:50002
+    depends_on:
+      db4unit:
+        condition: service_healthy
+    volumes:
+      - ./dockerfiles/dockerUnit/war/unit.war:/opt/jboss/war/unit.war:rw
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cp war/unit.war /opt/jboss/wildfly/standalone/deployments/
+        echo ${BELLINI_PROJECT_PASSWORD} | su -c 'iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-ports 8443'
+        echo ${BELLINI_PROJECT_PASSWORD} | su -c 'iptables -t nat -A OUTPUT -p tcp --dport 443 -o lo -j REDIRECT --to-port 8443'
+        echo ${BELLINI_PROJECT_PASSWORD} | su -c 'iptables -t nat -L'
+        echo ${BELLINI_PROJECT_PASSWORD} | su -c 'iptables-save > iptables_config.txt'
+        rm /opt/jboss/wildfly/standalone/configuration/standalone-ha.xml
+        cp /opt/jboss/wildfly/standalone/configuration/standalone.xml /opt/jboss/wildfly/standalone/configuration/standalone-ha.xml
+        /opt/jboss/wildfly/bin/standalone.sh -b 0.0.0.0 -bmanagement 0.0.0.0 --debug *:5005
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "49400:443" # application
+      - "49401:9990" # admin console
+      - "49402:5005" # debug port 
+
+  db4unit:
+      container_name: db4unit
+      image: mysql:8.0.29
+      environment:
+      - MYSQL_DATABASE=db4unit
+      - MYSQL_ROOT_PASSWORD= ${MYSQL_ROOT_PASSWORD}
+      networks:
+         cocoa_net:
+            ipv4_address: 172.16.0.8
+      command: --init-file /data/application/init.sql
+      volumes:
+      - ./workdir/db/unit/init/:/docker-entrypoint-initdb.d/
+      - ./workdir/db/unit/data/:/var/lib/mysql/
+      - ./sql/unit/init.sql:/data/application/init.sql
+      ports:
+      - 50002:3306 # permette accesso al DB sul container da locale
+      healthcheck:
+         test: ["CMD", "curl", "-f", "http://localhost:3306"]
+         interval: 15s
+         timeout: 30s
+         retries: 5
+         start_period: 80s
+   
+  keycloak:
+      image: jboss/keycloak
+      environment: 
+       DB_VENDOR: H2
+       KEYCLOAK_USER: admin
+       KEYCLOAK_PASSWORD: admin
+       PROXY_ADDRESS_FORWARDING: "true"
+       KEYCLOAK_SERVER_OPTS: Dkeycloak.profile.feature.scripts=enabled
+       BELLINI_PROJECT_PASSWORD: ${BELLINI_PROJECT_PASSWORD}
+       JAVA_OPTS: -Djavax.net.ssl.trustStore=/opt/jboss/keycloak/standalone/configuration/keystores/keycloaktruststore.p12 -Djavax.net.ssl.trustStorePassword=${BELLINI_PROJECT_PASSWORD} -Djavax.net.ssl.keyStore=/opt/jboss/keycloak/standalone/configuration/keystores/keycloak.p12 -Djavax.net.ssl.keyStorePassword=${BELLINI_PROJECT_PASSWORD}   
+      volumes:
+      - ./keycloak/keycloak.p12:/opt/jboss/keycloak/standalone/configuration/keystores/keycloak.p12
+      - ./keycloak/keycloaktruststore.p12:/opt/jboss/keycloak/standalone/configuration/keystores/keycloaktruststore.p12
+      - ./keycloak/store.jceks:/opt/jboss/keycloak/standalone/configuration/store.jceks
+      - ./keycloak/setup_keycloak.sh:/opt/jboss/startup-scripts/setup_keycloak.sh
+      ports:
+      - "61000:8080"
+      - "61001:8443"
+      depends_on:
+      - ldap
+      networks:
+         cocoa_net:
+            ipv4_address: 172.16.0.100
+            
+  ldap:
+     image: osixia/openldap
+     environment:
+       LDAP_ADMIN_DN: cn=admin,dc=example,dc=org
+       LDAP_ADMIN_PASSWORD: ${BELLINI_PROJECT_PASSWORD}
+     ports:
+     - "61100:389"
+     volumes:
+     - ldap-data:/var/lib/ldap
+     - ldap-config:/etc/ldap/slapd.d
+     networks:
+        cocoa_net:
+           ipv4_address: 172.16.0.101
+
+volumes:
+  ldap-data:
+  ldap-config:
+
+networks:
+    cocoa_net:
+        driver: bridge
+        ipam:
+           config:
+              - subnet: 172.16.0.0/24
+                gateway: 172.16.0.254

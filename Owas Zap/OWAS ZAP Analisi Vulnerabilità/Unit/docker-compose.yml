@@ -1,0 +1,69 @@
+version: "3.4"
+
+services:
+  app4unit: 
+    container_name: "app4unit"
+    build: ./dockerfiles/dockerUnit/
+    networks:
+      cocoa_net:
+        ipv4_address: 172.16.0.3
+    environment:
+      - WILDFLY_USER=igor
+      - WILDFLY_PASS=frederich1
+      - DB_NAME=unit
+      - DB_USER=javaclient
+      - DB_PASS=password1!
+      - DB_URI=db4unit:50002
+    depends_on:
+      db4unit:
+        condition: service_healthy
+    volumes:
+      - ./dockerfiles/dockerUnit/war/unit.war:/opt/jboss/war/unit.war:rw
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cp war/unit.war /opt/jboss/wildfly/standalone/deployments/
+        echo 'progettobellini2023' | su -c 'iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-ports 8443'
+        echo 'progettobellini2023' | su -c 'iptables -t nat -A OUTPUT -p tcp --dport 443 -o lo -j REDIRECT --to-port 8443'
+        echo 'progettobellini2023' | su -c 'iptables -t nat -L'
+        echo 'progettobellini2023' | su -c 'iptables-save > iptables_config.txt'
+        /opt/jboss/wildfly/bin/standalone.sh -b 0.0.0.0 -bmanagement 0.0.0.0 --debug *:5005
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "49400:443" # application
+      - "49401:9990" # admin console
+      - "49402:5005" # debug port 
+
+  db4unit:
+    container_name: "db4unit"
+    image: "mysql:8.0.29" 
+    environment:
+      - MYSQL_DATABASE=db4unit
+      - MYSQL_ROOT_PASSWORD=supersecret
+    networks:
+      cocoa_net:
+        ipv4_address: 172.16.0.8
+    command: 
+      --init-file /data/application/init.sql
+    volumes:
+      - ./workdir/db/unit/init/:/docker-entrypoint-initdb.d/ 
+      - ./workdir/db/unit/data/:/var/lib/mysql/    
+      - ./sql/unit/init.sql:/data/application/init.sql  
+    ports:
+      - "50002:3306" # permette accesso al DB sul container da locale
+    healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:3306"]
+        interval: 5s
+        timeout: 10s
+        retries: 5
+        start_period: 60s
+
+networks:
+    cocoa_net:
+        driver: bridge
+        ipam:
+           config:
+              - subnet: 172.16.0.0/24
+                gateway: 172.16.0.254

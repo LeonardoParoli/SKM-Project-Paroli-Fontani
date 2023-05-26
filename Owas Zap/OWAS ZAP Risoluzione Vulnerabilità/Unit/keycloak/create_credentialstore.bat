@@ -1,0 +1,1 @@
+keytool -genseckey -alias store -keyalg AES -keysize 256 -storetype jceks -keystore store.jceks
