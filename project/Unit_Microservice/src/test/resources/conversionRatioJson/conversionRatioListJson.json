@@ -1,0 +1,26 @@
+[
+{
+    "id":"1",
+    "startUnitName":"unit1",
+    "startUnitId":"1",
+    "endUnitName":"unit2",
+    "endUnitId":"2",
+    "ratio":"3.0"
+},
+    {
+    "id":"2",
+    "startUnitName":"unit3",
+    "startUnitId":"3",
+    "endUnitName":"unit4",
+    "endUnitId":"4",
+    "ratio":"6.0"
+},
+    {
+    "id":"3",
+    "startUnitName":"unit1",
+    "startUnitId":"1",
+    "endUnitName":"unit4",
+    "endUnitId":"4",
+    "ratio":"4.0"
+}
+]

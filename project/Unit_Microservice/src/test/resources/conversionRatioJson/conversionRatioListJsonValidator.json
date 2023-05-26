@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "array",
+  "items": [
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "startUnitName": {
+          "type": "string"
+        },
+        "startUnitId": {
+          "type": "string"
+        },
+        "endUnitName": {
+          "type": "string"
+        },
+        "endUnitId": {
+          "type": "string"
+        },
+        "ratio": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "startUnitName",
+        "startUnitId",
+        "endUnitName",
+        "endUnitId",
+        "ratio"
+      ]
+    }
+  ]
+}

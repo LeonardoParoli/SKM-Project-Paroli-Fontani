@@ -1,0 +1,70 @@
+version: '3.4'
+
+services:
+   
+   db4unit:
+      container_name: db4unit
+      image: mysql:8.0.29
+      environment:
+      - MYSQL_DATABASE=db4unit
+      - MYSQL_ROOT_PASSWORD= ${MYSQL_ROOT_PASSWORD}
+      networks:
+         cocoa_net:
+            ipv4_address: 172.16.0.8
+      command: --init-file /data/application/init.sql
+      volumes:
+      - ./workdir/db/unit/init/:/docker-entrypoint-initdb.d/
+      - ./workdir/db/unit/data/:/var/lib/mysql/
+      - ./sql/unit/init.sql:/data/application/init.sql
+      ports:
+      - 50002:3306 # permette accesso al DB sul container da locale
+   
+   keycloak:
+      image: jboss/keycloak
+      environment: 
+       DB_VENDOR: H2
+       KEYCLOAK_USER: admin
+       KEYCLOAK_PASSWORD: admin
+       PROXY_ADDRESS_FORWARDING: "true"
+       KEYCLOAK_SERVER_OPTS: Dkeycloak.profile.feature.scripts=enabled
+       BELLINI_PROJECT_PASSWORD: ${BELLINI_PROJECT_PASSWORD}
+       JAVA_OPTS: -Djavax.net.ssl.trustStore=/opt/jboss/keycloak/standalone/configuration/keystores/keycloaktruststore.p12 -Djavax.net.ssl.trustStorePassword=$BELLINI_PROJECT_PASSWORD -Djavax.net.ssl.keyStore=/opt/jboss/keycloak/standalone/configuration/keystores/keycloak.p12 -Djavax.net.ssl.keyStorePassword=$BELLINI_PROJECT_PASSWORD   
+      volumes:
+      - ./keycloak/keycloak.p12:/opt/jboss/keycloak/standalone/configuration/keystores/keycloak.p12
+      - ./keycloak/keycloaktruststore.p12:/opt/jboss/keycloak/standalone/configuration/keystores/keycloaktruststore.p12
+      - ./keycloak/store.jceks:/opt/jboss/keycloak/standalone/configuration/store.jceks
+      - ./keycloak/setup_keycloak.sh:/opt/jboss/startup-scripts/setup_keycloak.sh
+      ports:
+      - "61000:8080"
+      - "61001:8443"
+      depends_on:
+      - ldap
+      networks:
+         cocoa_net:
+            ipv4_address: 172.16.0.100
+            
+   ldap:
+     image: osixia/openldap
+     environment:
+       LDAP_ADMIN_DN: cn=admin,dc=example,dc=org
+       LDAP_ADMIN_PASSWORD: ${BELLINI_PROJECT_PASSWORD}
+     ports:
+     - "61100:389"
+     volumes:
+     - ldap-data:/var/lib/ldap
+     - ldap-config:/etc/ldap/slapd.d
+     networks:
+        cocoa_net:
+           ipv4_address: 172.16.0.101
+
+volumes:
+  ldap-data:
+  ldap-config:
+  
+networks:
+    cocoa_net:
+        driver: bridge
+        ipam:
+           config:
+              - subnet: 172.16.0.0/24
+                gateway: 172.16.0.254
